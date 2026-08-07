@@ -1,0 +1,254 @@
+# Default values for LispFlow.
+# This is a YAML-formatted file.
+
+replicaCount: 3
+
+image:
+  repository: your-registry/lispflow
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+  fsGroup: 65534
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65534
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: api.lispflow.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: lispflow-tls
+      hosts:
+        - api.lispflow.io
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+
+nodeSelector:
+  workload: billing
+
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "billing"
+    effect: "NoSchedule"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - lispflow
+          topologyKey: kubernetes.io/hostname
+
+# ── Application Configuration ────────────────────────────────────────────
+
+config:
+  server:
+    host: "0.0.0.0"
+    port: 8080
+    read_timeout: "10s"
+    write_timeout: "10s"
+    idle_timeout: "120s"
+    max_header_bytes: 1048576
+    shutdown_timeout: "30s"
+
+  database:
+    host: ""
+    port: 5432
+    user: "lispflow"
+    password: ""
+    dbname: "lispflow"
+    sslmode: "require"
+    max_conns: 25
+    min_conns: 5
+    max_conn_lifetime: "1h"
+    max_conn_idle_time: "30m"
+    health_check_period: "5m"
+
+  redis:
+    host: ""
+    port: 6379
+    password: ""
+    db: 0
+    pool_size: 10
+    timeout: "5s"
+
+  billing:
+    sandbox_enabled: true
+    max_plan_size_bytes: 65536
+    max_eval_time_ms: 100
+    batch_size: 100
+    batch_flush_interval: "5s"
+    simulation_timeout: "30s"
+    default_currency: "USD"
+
+  webhook:
+    enabled: true
+    max_retries: 3
+    retry_backoff: "5s"
+    timeout: "10s"
+    max_payload_size: 1048576
+    secret_header: "X-Webhook-Signature"
+    queue_size: 10000
+    workers: 10
+
+  metrics:
+    enabled: true
+    path: "/metrics"
+    namespace: "lispflow"
+    subsystem: "billing"
+
+  auth:
+    enabled: true
+    secret: ""
+    issuer: "lispflow"
+    audience: "lispflow-api"
+    expiry: "24h"
+
+  log:
+    level: "info"
+    format: "json"
+    output: "stdout"
+    dev_mode: false
+
+# ── Secrets ──────────────────────────────────────────────────────────────
+
+secrets:
+  db_password:
+    existingSecret: ""
+    existingSecretKey: "db-password"
+  jwt_secret:
+    existingSecret: ""
+    existingSecretKey: "jwt-secret"
+  webhook_secret:
+    existingSecret: ""
+    existingSecretKey: "webhook-secret"
+
+# ── Worker Configuration ─────────────────────────────────────────────────
+
+worker:
+  enabled: true
+  replicaCount: 2
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+# ── Migration Job ────────────────────────────────────────────────────────
+
+migration:
+  enabled: true
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+
+# ── Sub-charts ───────────────────────────────────────────────────────────
+
+postgresql:
+  enabled: false
+  auth:
+    username: lispflow
+    database: lispflow
+    existingSecret: ""
+  primary:
+    persistence:
+      enabled: true
+      size: 100Gi
+
+redis:
+  enabled: false
+  auth:
+    enabled: true
+    existingSecret: ""
+  master:
+    persistence:
+      enabled: true
+      size: 10Gi
+
+prometheus:
+  enabled: false
+  server:
+    persistentVolume:
+      enabled: true
+      size: 50Gi
+
+grafana:
+  enabled: false
+  admin:
+    existingSecret: ""
+  persistence:
+    enabled: true
+    size: 10Gi

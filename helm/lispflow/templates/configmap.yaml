@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lispflow.fullname" . }}
+  labels:
+    {{- include "lispflow.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    server:
+      host: {{ .Values.config.server.host | quote }}
+      port: {{ .Values.config.server.port }}
+      read_timeout: {{ .Values.config.server.read_timeout | quote }}
+      write_timeout: {{ .Values.config.server.write_timeout | quote }}
+      idle_timeout: {{ .Values.config.server.idle_timeout | quote }}
+      max_header_bytes: {{ .Values.config.server.max_header_bytes }}
+      shutdown_timeout: {{ .Values.config.server.shutdown_timeout | quote }}
+
+    database:
+      host: {{ .Values.config.database.host | quote }}
+      port: {{ .Values.config.database.port }}
+      user: {{ .Values.config.database.user | quote }}
+      dbname: {{ .Values.config.database.dbname | quote }}
+      sslmode: {{ .Values.config.database.sslmode | quote }}
+      max_conns: {{ .Values.config.database.max_conns }}
+      min_conns: {{ .Values.config.database.min_conns }}
+      max_conn_lifetime: {{ .Values.config.database.max_conn_lifetime | quote }}
+      max_conn_idle_time: {{ .Values.config.database.max_conn_idle_time | quote }}
+      health_check_period: {{ .Values.config.database.health_check_period | quote }}
+
+    redis:
+      host: {{ .Values.config.redis.host | quote }}
+      port: {{ .Values.config.redis.port }}
+      db: {{ .Values.config.redis.db }}
+      pool_size: {{ .Values.config.redis.pool_size }}
+      timeout: {{ .Values.config.redis.timeout | quote }}
+
+    billing:
+      sandbox_enabled: {{ .Values.config.billing.sandbox_enabled }}
+      max_plan_size_bytes: {{ .Values.config.billing.max_plan_size_bytes }}
+      max_eval_time_ms: {{ .Values.config.billing.max_eval_time_ms }}
+      batch_size: {{ .Values.config.billing.batch_size }}
+      batch_flush_interval: {{ .Values.config.billing.batch_flush_interval | quote }}
+      simulation_timeout: {{ .Values.config.billing.simulation_timeout | quote }}
+      default_currency: {{ .Values.config.billing.default_currency | quote }}
+
+    webhook:
+      enabled: {{ .Values.config.webhook.enabled }}
+      max_retries: {{ .Values.config.webhook.max_retries }}
+      retry_backoff: {{ .Values.config.webhook.retry_backoff | quote }}
+      timeout: {{ .Values.config.webhook.timeout | quote }}
+      max_payload_size: {{ .Values.config.webhook.max_payload_size }}
+      secret_header: {{ .Values.config.webhook.secret_header | quote }}
+      queue_size: {{ .Values.config.webhook.queue_size }}
+      workers: {{ .Values.config.webhook.workers }}
+
+    metrics:
+      enabled: {{ .Values.config.metrics.enabled }}
+      path: {{ .Values.config.metrics.path | quote }}
+      namespace: {{ .Values.config.metrics.namespace | quote }}
+      subsystem: {{ .Values.config.metrics.subsystem | quote }}
+
+    auth:
+      enabled: {{ .Values.config.auth.enabled }}
+      issuer: {{ .Values.config.auth.issuer | quote }}
+      audience: {{ .Values.config.auth.audience | quote }}
+      expiry: {{ .Values.config.auth.expiry | quote }}
+
+    log:
+      level: {{ .Values.config.log.level | quote }}
+      format: {{ .Values.config.log.format | quote }}
+      output: {{ .Values.config.log.output | quote }}
+      dev_mode: {{ .Values.config.log.dev_mode }}

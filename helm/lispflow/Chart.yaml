@@ -1,0 +1,34 @@
+apiVersion: v2
+name: lispflow
+description: A programmable Lisp-based usage billing engine for SaaS platforms
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - billing
+  - saas
+  - lisp
+  - usage-based
+home: https://github.com/your-org/lispflow
+sources:
+  - https://github.com/your-org/lispflow
+maintainers:
+  - name: LispFlow Team
+    email: dev@lispflow.io
+dependencies:
+  - name: postgresql
+    version: "13.2.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  - name: redis
+    version: "18.5.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+  - name: prometheus
+    version: "25.8.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: prometheus.enabled
+  - name: grafana
+    version: "7.0.0"
+    repository: "https://grafana.github.io/helm-charts"
+    condition: grafana.enabled

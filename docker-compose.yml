@@ -1,0 +1,81 @@
+version: "3.8"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - LISPFLOW_DATABASE_HOST=postgres
+      - LISPFLOW_DATABASE_PASSWORD=postgres
+      - LISPFLOW_DATABASE_DBNAME=lispflow
+      - LISPFLOW_REDIS_HOST=redis
+      - LISPFLOW_LOG_DEV_MODE=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./config.yaml:/etc/lispflow/config.yaml:ro
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["/usr/local/bin/worker"]
+    environment:
+      - LISPFLOW_DATABASE_HOST=postgres
+      - LISPFLOW_DATABASE_PASSWORD=postgres
+      - LISPFLOW_DATABASE_DBNAME=lispflow
+      - LISPFLOW_REDIS_HOST=redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: lispflow
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: lispflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lispflow -d lispflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["/usr/local/bin/migrate"]
+    environment:
+      - LISPFLOW_DATABASE_HOST=postgres
+      - LISPFLOW_DATABASE_PASSWORD=postgres
+      - LISPFLOW_DATABASE_DBNAME=lispflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - migrate
+
+volumes:
+  postgres_data:
+  redis_data:

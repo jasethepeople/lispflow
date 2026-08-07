@@ -1,0 +1,660 @@
+openapi: 3.0.3
+info:
+  title: LispFlow Billing Engine API
+  description: |
+    A programmable, sandboxed Lisp-based usage billing engine for SaaS platforms.
+
+    Pricing plans are stored as raw Lisp S-expressions, enabling dynamic,
+    hot-reloadable pricing without code deployments. The engine supports
+    real-time evaluation, time-travel simulation, and transactional ledger recording.
+  version: 1.0.0
+  contact:
+    name: LispFlow Support
+    email: support@lispflow.io
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development
+  - url: https://api.lispflow.io/api/v1
+    description: Production
+
+tags:
+  - name: Health
+    description: System health and readiness probes
+  - name: Plans
+    description: Pricing plan management and versioning
+  - name: Billing
+    description: Usage evaluation and ledger operations
+  - name: Simulation
+    description: Time-travel pricing simulations
+  - name: Validation
+    description: Plan expression validation
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Liveness probe
+      description: Returns 200 if the service is running.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness probe
+      description: Returns 200 if the service is ready to accept traffic.
+      operationId: getReady
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /metrics:
+    get:
+      tags:
+        - Health
+      summary: Prometheus metrics
+      description: Exposes metrics in Prometheus exposition format.
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Metrics data
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /customers/{customer_id}/plans:
+    post:
+      tags:
+        - Plans
+      summary: Activate a new pricing plan
+      description: |
+        Creates and activates a new pricing plan for a customer.
+        The previous active plan (if any) is automatically deactivated.
+        Plans are validated before activation.
+      operationId: createPlan
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "cust-42"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlanRequest'
+      responses:
+        '201':
+          description: Plan activated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Invalid plan expression
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags:
+        - Plans
+      summary: Get plan history
+      description: Returns all pricing plans (active and inactive) for a customer.
+      operationId: getPlanHistory
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Plan history retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanHistoryResponse'
+
+  /customers/{customer_id}/plans/active:
+    get:
+      tags:
+        - Plans
+      summary: Get active plan
+      description: Returns the currently active pricing plan for a customer.
+      operationId: getActivePlan
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active plan found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '404':
+          description: No active plan found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /customers/{customer_id}/evaluate:
+    post:
+      tags:
+        - Billing
+      summary: Evaluate usage and record to ledger
+      description: |
+        Evaluates a usage event against the customer's active pricing plan
+        and atomically records the result to the billing ledger.
+      operationId: evaluateUsage
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluateRequest'
+      responses:
+        '200':
+          description: Evaluation successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerEntry'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No active plan for customer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Evaluation or ledger error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /customers/{customer_id}/batch:
+    post:
+      tags:
+        - Billing
+      summary: Batch evaluate usage events
+      description: Processes multiple usage events in a single batch operation.
+      operationId: batchEvaluate
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchEvaluateRequest'
+      responses:
+        '200':
+          description: Batch processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchEvaluateResponse'
+
+  /customers/{customer_id}/history:
+    get:
+      tags:
+        - Billing
+      summary: Get billing history
+      description: Returns paginated billing ledger entries for a customer.
+      operationId: getBillingHistory
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 1000
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Billing history retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingHistoryResponse'
+
+  /customers/{customer_id}/periods/{start}/{end}:
+    get:
+      tags:
+        - Billing
+      summary: Get period summary
+      description: Returns aggregated billing data for a specific time period.
+      operationId: getPeriodSummary
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: start
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: end
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Period summary retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodSummary'
+
+  /simulate:
+    post:
+      tags:
+        - Simulation
+      summary: Run time-travel simulation
+      description: |
+        Evaluates historical usage data against a proposed pricing plan
+        without affecting live billing. Returns detailed cost breakdown
+        and revenue impact analysis.
+      operationId: simulatePlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulationRequest'
+      responses:
+        '200':
+          description: Simulation completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationResult'
+        '400':
+          description: Invalid plan or history data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /validate:
+    post:
+      tags:
+        - Validation
+      summary: Validate plan expression
+      description: Checks if a Lisp pricing expression is syntactically valid.
+      operationId: validatePlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateRequest'
+      responses:
+        '200':
+          description: Plan is valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateResponse'
+        '400':
+          description: Plan is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: "1.0.0"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "no active plan found for customer cust-42"
+
+    Plan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+        plan_expr:
+          type: string
+          description: Lisp S-expression pricing plan
+          example: '(+ (volume (usage "requests") 0.01))'
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        activated_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    CreatePlanRequest:
+      type: object
+      required:
+        - plan_expr
+      properties:
+        plan_expr:
+          type: string
+          description: Lisp S-expression pricing plan
+          example: '(+ (tiered (usage "compute_units") '((0 100 0.05) (100 500 0.04) (500 nil 0.03))) (overage (usage "storage_gb") 1000 0.02))'
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            name: "Pro Tier"
+            version: "2.0"
+
+    PlanHistoryResponse:
+      type: object
+      properties:
+        plans:
+          type: array
+          items:
+            $ref: '#/components/schemas/Plan'
+
+    EvaluateRequest:
+      type: object
+      required:
+        - usage
+      properties:
+        usage:
+          type: object
+          description: Usage dimensions
+          additionalProperties:
+            type: number
+          example:
+            compute_units: 150
+            storage_gb: 1200
+            egress_gb: 50
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+
+    LedgerEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+        plan_id:
+          type: string
+          format: uuid
+        plan_expr:
+          type: string
+        usage_data:
+          type: object
+          additionalProperties:
+            type: number
+        cost:
+          type: number
+          format: decimal
+          example: 17.00
+        currency:
+          type: string
+          example: "USD"
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        evaluated_at:
+          type: string
+          format: date-time
+        eval_duration_ms:
+          type: integer
+          example: 3
+
+    BatchEvaluateRequest:
+      type: object
+      required:
+        - events
+      properties:
+        events:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: number
+          example:
+            - compute_units: 100
+              storage_gb: 500
+            - compute_units: 200
+              storage_gb: 1000
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+
+    BatchEvaluateResponse:
+      type: object
+      properties:
+        processed:
+          type: integer
+          example: 2
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
+
+    BillingHistoryResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
+
+    PeriodSummary:
+      type: object
+      properties:
+        customer_id:
+          type: string
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [open, closing, closed]
+        total_usage:
+          type: object
+          additionalProperties:
+            type: number
+        computed_cost:
+          type: number
+          format: decimal
+
+    SimulationRequest:
+      type: object
+      required:
+        - proposed_plan
+        - history
+      properties:
+        customer_id:
+          type: string
+          example: "cust-42"
+        proposed_plan:
+          type: string
+          description: Proposed Lisp pricing expression
+          example: '(+ (tiered (usage "compute_units") '((0 100 0.04) (100 500 0.03) (500 nil 0.02))) (volume (usage "egress_gb") 0.10))'
+        history:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: number
+          example:
+            - compute_units: 80
+              storage_gb: 500
+              egress_gb: 20
+            - compute_units: 250
+              storage_gb: 1500
+              egress_gb: 80
+
+    SimulationResult:
+      type: object
+      properties:
+        plan_expr:
+          type: string
+        periods:
+          type: integer
+          example: 5
+        total_cost:
+          type: number
+          format: decimal
+          example: 154.40
+        average_cost:
+          type: number
+          format: decimal
+          example: 30.88
+        min_cost:
+          type: number
+          format: decimal
+          example: 4.00
+        max_cost:
+          type: number
+          format: decimal
+          example: 80.00
+        cost_breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/PeriodCost'
+        duration_ms:
+          type: integer
+          example: 15
+
+    PeriodCost:
+      type: object
+      properties:
+        period:
+          type: integer
+        usage:
+          type: object
+          additionalProperties:
+            type: number
+        cost:
+          type: number
+          format: decimal
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidateRequest:
+      type: object
+      required:
+        - plan_expr
+      properties:
+        plan_expr:
+          type: string
+          example: '(+ (volume (usage "requests") 0.01))'
+
+    ValidateResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          example: true
